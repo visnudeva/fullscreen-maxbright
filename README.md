@@ -1,4 +1,4 @@
-# Fullscreen Max Brightness
+# Fullscreen MaxBright
 
 A GNOME Shell extension that automatically sets your display brightness to maximum when watching fullscreen videos and restores your previous setting when exiting.
 
