@@ -13,10 +13,9 @@ A GNOME Shell extension that automatically sets your display brightness to maxim
 ### Supported Applications
 
 - **Video Players**: VLC, MPV, Celluloid, Totem, SMPlayer, Rhythmbox, Clementine, Audacious
-- **Browsers**: Firefox, Chrome, Chromium, Brave, Edge, Zen, Waterfox, LibreWolf, Floorp
+- **Browsers**: Firefox, Chrome, Chromium, Brave, Zen, Waterfox, LibreWolf, Floorp
 - **Streaming Services**: YouTube, Netflix, Prime Video, Disney+, Hulu, Twitch
 - **Media Centers**: Jellyfin, Plex, Kodi, Stremio, Emby, Plexamp
-- **Music Services**: Spotify, Tidal, SoundCloud, Bandcamp
 
 ## Installation
 
@@ -45,7 +44,7 @@ gnome-extensions enable fullscreen-maxbright@visnudeva.github.io
 
 ## Configuration
 
-The extension works out of the box with no configuration needed. Brightness is set to 100% by default.
+The extension works out of the box with no configuration needed. Brightness is set to 100% by default in full screen.
 
 ## Troubleshooting
 
