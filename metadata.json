@@ -1,0 +1,14 @@
+{
+  "name": "Fullscreen Max Brightness",
+  "description": "Automatically sets brightness to maximum when watching fullscreen videos and restores the previous setting when exiting.",
+  "uuid": "fullscreen-maxbright@visnudeva.github.io",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49"
+  ],
+  "version": "1.0",
+  "url": "https://github.com/visnudeva/fullscreen-maxbright"
+}
