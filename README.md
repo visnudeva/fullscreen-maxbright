@@ -21,9 +21,11 @@ A GNOME Shell extension that automatically sets your display brightness to maxim
 
 ### From GNOME Extensions (Recommended)
 
-Once published, install directly from [extensions.gnome.org](https://extensions.gnome.org/).
+Once published, install directly from [extensions.gnome.org](https://extensi283547ons.gnome.org/).
 
 ### Manual Installation
+
+Download the .zip file, extract
 
 ```bash
 # Copy to local extensions directory
