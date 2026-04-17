@@ -29,7 +29,7 @@ Download the .zip file, extract
 
 ```bash
 # Copy to local extensions directory
-cp -r fullscreen-maxbright@visnudeva.github.io ~/.local/share/gnome-shell/extensions/
+cp -r fullscreen-maxbright-main ~/.local/share/gnome-shell/extensions/
 
 # Enable the extension
 gnome-extensions enable fullscreen-maxbright@visnudeva.github.io
