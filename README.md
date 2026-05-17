@@ -11,7 +11,7 @@ Works across workspaces too—whether you're switching to a full-screen window o
 
 ## Features
 
-- **Automatic Detection**: Detects fullscreen video playback instantly
+- **Automatic Detection**: Detects fullscreen instantly
 - **Max Brightness**: Sets brightness to 100% during video playback for optimal viewing
 - **Seamless Restoration**: Restores your previous brightness when exiting fullscreen
 - **Wide Compatibility**: Works with all major video players and streaming services
@@ -68,7 +68,7 @@ The extension works out of the box with no configuration needed. Brightness is s
 
 ## Requirements
 
-- GNOME Shell 45–49
+- GNOME Shell 45–50
 - Software brightness control (standard on most laptops)
 
 ## License
