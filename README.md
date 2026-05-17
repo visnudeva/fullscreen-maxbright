@@ -1,6 +1,9 @@
-# Fullscreen MaxBright
+# Fullscreen MaxBright / Smart Brightness Control
 
-A GNOME Shell extension that automatically sets your display brightness to maximum when watching fullscreen videos and restores your previous setting when exiting.
+A GNOME Shell extension that dims the lights for your content. 
+Automatically boosts brightness to maximum when you enter full screen for movies or games, 
+then seamlessly restores your previous setting when you exit. 
+Works across workspaces too—whether you're switching to a full-screen window or away from one.
 
 ## Features
 
