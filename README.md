@@ -1,7 +1,7 @@
 # Fullscreen MaxBright / Smart Brightness Control
 
 <p align="center">
-  <img src="https://github.com/visnudeva/JustWrite/blob/main/JustWrite.png?raw=true" width="1000">
+  <img src="https://github.com/visnudeva/JustWrite/blob/main/ftb.png?raw=true" width="1000">
 </p>
 
 A GNOME Shell extension that dims the lights for your content. 
