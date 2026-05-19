@@ -1,7 +1,10 @@
 # Fullscreen MaxBright / Smart Brightness Control
 
 <p align="center">
-  <img src="https://github.com/visnudeva/fullscreen-maxbright/blob/main/ftb.png?raw=true" width="400">
+  <img src="https://github.com/visnudeva/fullscreen-maxbright/blob/main/icon.png?raw=true" width="200">
+</p>
+<p align="center">
+  <img src="https://github.com/visnudeva/fullscreen-maxbright/blob/main/ftb.png?raw=true" width="300">
 </p>
 
 A GNOME Shell extension that dims the lights for your content. 
