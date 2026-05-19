@@ -10,6 +10,9 @@
     "49",
     "50"
   ],
-  "version": "2.0",
+  "version": 3,
+  "donate": {
+    "ko_fi": "visnu_deva"
+  },
   "url": "https://github.com/visnudeva/fullscreen-maxbright"
 }
