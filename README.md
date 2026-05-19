@@ -1,16 +1,19 @@
-# Fullscreen MaxBright / Smart Brightness Control
+# <img src="https://github.com/visnudeva/fullscreen-maxbright/blob/main/icon.png?raw=true" width="50"> Fullscreen MaxBright / Smart Brightness Control
 
-<p align="center">
-  <img src="https://github.com/visnudeva/fullscreen-maxbright/blob/main/icon.png?raw=true" width="200">
-</p>
-<p align="center">
-  <img src="https://github.com/visnudeva/fullscreen-maxbright/blob/main/ftb.png?raw=true" width="300">
-</p>
 
-A GNOME Shell extension that dims the lights for your content. 
-Automatically boosts brightness to maximum when you enter full screen for movies or games, 
-then seamlessly restores your previous setting when you exit. 
-Works across workspaces too—whether you're switching to a full-screen window or away from one.
+<table>
+  <tr>
+    <td>
+      <strong>A GNOME Shell extension that dims the lights for your content.</strong><br>
+      Automatically boosts brightness to maximum when you enter full screen for movies or games,<br>
+      then seamlessly restores your previous setting when you exit.<br>
+      Works across workspaces too—whether you're switching to a full-screen window or away from one.
+    </td>
+    <td>
+      <img src="https://github.com/visnudeva/fullscreen-maxbright/blob/main/ftb.png?raw=true" width="300">
+    </td>
+  </tr>
+</table>
 
 ## Features
 
