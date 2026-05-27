@@ -1,4 +1,5 @@
 import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
 
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -39,6 +40,8 @@ export default class VideoBrightnessExtension extends Extension {
     _windowFocusId = null;
     _workspaceId = null;
     _brightnessChangedId = null;
+    _sleepSignalId = null;
+    _brightnessBeforeSleep = -1;
 
     enable() {
         this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SETTLE_DELAY_MS, () => {
@@ -56,6 +59,7 @@ export default class VideoBrightnessExtension extends Extension {
 
         this._stopMonitoring();
         this._disconnectBrightnessMonitor();
+        this._disconnectSleepMonitor();
         this._restoreBrightness();
 
         this._brightnessProxy = null;
@@ -74,6 +78,58 @@ export default class VideoBrightnessExtension extends Extension {
         this._startMonitoring();
         this._checkFullscreenVideo();
         this._connectBrightnessMonitor();
+        this._connectSleepMonitor();
+    }
+
+    _connectSleepMonitor() {
+        this._sleepSignalId = Gio.DBus.system.signal_subscribe(
+            'org.freedesktop.login1',
+            'org.freedesktop.login1.Manager',
+            'PrepareForSleep',
+            '/org/freedesktop/login1',
+            null,
+            Gio.DBusSignalFlags.NONE,
+            (_connection, _sender, _path, _iface, _signal, params) => {
+                const [sleeping] = params.deepUnpack();
+                if (sleeping) {
+                    this._onPrepareForSleep();
+                } else {
+                    this._onResumeFromSleep();
+                }
+            }
+        );
+    }
+
+    _disconnectSleepMonitor() {
+        if (this._sleepSignalId !== null) {
+            Gio.DBus.system.signal_unsubscribe(this._sleepSignalId);
+            this._sleepSignalId = null;
+        }
+    }
+
+    _onPrepareForSleep() {
+        // Snapshot the user's brightness before the system can reset it on wake
+        this._brightnessBeforeSleep = this._isVideoActive
+            ? this._lastKnownBrightness
+            : this._getBrightness();
+    }
+
+    _onResumeFromSleep() {
+        // Hardware and compositor need a moment to settle after resume
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, SETTLE_DELAY_MS, () => {
+            if (this._brightnessBeforeSleep >= 0) {
+                // Temporarily suppress _onBrightnessChanged so the hardware-reset
+                // value doesn't overwrite the snapshot we took before sleep.
+                const snapshot = this._brightnessBeforeSleep;
+                this._brightnessBeforeSleep = -1;
+
+                if (!this._isVideoActive) {
+                    this._lastKnownBrightness = snapshot;
+                    this._setBrightness(snapshot);
+                }
+            }
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _connectBrightnessMonitor() {
