@@ -44,6 +44,11 @@ export default class VideoBrightnessExtension extends Extension {
     _brightnessBeforeSleep = -1;
 
     enable() {
+        // Remove any existing timeout before creating a new one
+        if (this._timeoutId) {
+            GLib.source_remove(this._timeoutId);
+            this._timeoutId = null;
+        }
         this._timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SETTLE_DELAY_MS, () => {
             this._initialize();
             this._timeoutId = null;
@@ -206,9 +211,7 @@ export default class VideoBrightnessExtension extends Extension {
         const isBrowserVideo = BROWSER_CLASSES.some(browser => windowClass.includes(browser))
             && BROWSER_VIDEO_SERVICES.some(service => windowTitle.includes(service));
 
-        const shouldActivateVideo = (isVideoPlayer && isFullscreen)
-            || (isFullscreen && isMediaTitle)
-            || (isBrowserVideo && isFullscreen);
+        const shouldActivateVideo = isFullscreen && (isVideoPlayer || isMediaTitle || isBrowserVideo);
 
         if (shouldActivateVideo && !this._isVideoActive) {
             this._enterVideoMode();
@@ -251,10 +254,6 @@ export default class VideoBrightnessExtension extends Extension {
             return;
         }
 
-        try {
-            this._brightnessProxy.value = targetFloat;
-        } catch {
-            // Ignore errors
-        }
+        this._brightnessProxy.value = targetFloat;
     }
 }
