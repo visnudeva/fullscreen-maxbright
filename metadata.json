@@ -4,6 +4,8 @@
   "uuid": "fullscreen-maxbright@visnudeva.github.io",
   "shell-version": ["48", "49", "50"],
   "version": 3,
-  "donate": ["https://ko-fi.com/visnu_deva"],
+  "donations": {
+  	"kofi": "visnu_deva"
+	},
   "url": "https://github.com/visnudeva/fullscreen-maxbright"
 }
