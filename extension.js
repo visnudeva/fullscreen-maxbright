@@ -4,35 +4,25 @@ import Gio from 'gi://Gio';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-const MEDIA_WINDOW_CLASSES = [
-    // Desktop video players
-    'vlc', 'mpv', 'celluloid', 'totem', 'smplayer', 'gnome-mpv', 'parole',
-    'dragon', 'kaffeine', 'xine', 'mplayer', 'audacious', 'clementine', 'rhythmbox',
-    // Streaming apps
-    'stremio', 'jellyfin', 'jellyfin-media-player', 'plex', 'plexhometheater',
-    'kodi', 'osmc', 'libreelec',
-    // Browsers
-    'firefox', 'chrome', 'chromium', 'brave', 'zen', 'waterfox', 'librewolf', 'floorp',
-];
+import {
+    resolveUserBrightness,
+    shouldSkipBrightnessSet,
+    shouldSuppressUserBrightnessTracking,
+    VIDEO_BRIGHTNESS,
+} from './lib/brightness.js';
+import {shouldActivateVideoMode} from './lib/video-detection.js';
 
-const VIDEO_TITLE_KEYWORDS = [
-    'youtube', 'vimeo', 'netflix', 'prime video', 'disney', 'hulu', 'twitch',
-    'video', 'media', 'vlc', 'mpv', 'watch', 'play', 'movie', 'film',
-    'stremio', 'jellyfin', 'plex', 'kodi', 'emby', 'plexamp',
-    'spotify', 'tidal', 'soundcloud', 'bandcamp',
-];
+const SETTINGS_SCHEMA_ID = 'org.gnome.shell.extensions.fullscreen-maxbright';
+const SETTINGS_SCHEMA_PATH = '/org/gnome/shell/extensions/fullscreen-maxbright/';
 
-const BROWSER_VIDEO_SERVICES = ['youtube', 'vimeo', 'netflix', 'twitch', 'prime', 'disney', 'hulu'];
-
-const BROWSER_CLASSES = ['firefox', 'chrome', 'chromium', 'brave', 'edge'];
-
-const VIDEO_BRIGHTNESS = 1.0;
 const SETTLE_DELAY_MS = 1000;
+const POST_RESUME_GUARD_MS = 5000;
+const RESUME_RESTORE_DELAYS_MS = [0, 1000, 2500, 4500];
 const MONITOR_INTERVAL_SEC = 1;
-const BRIGHTNESS_EPSILON = 0.01;
 
 export default class VideoBrightnessExtension extends Extension {
     _brightnessProxy = null;
+    _settings = null;
     _isVideoActive = false;
     _lastKnownBrightness = -1;
     _timeoutId = null;
@@ -42,9 +32,11 @@ export default class VideoBrightnessExtension extends Extension {
     _brightnessChangedId = null;
     _sleepSignalId = null;
     _brightnessBeforeSleep = -1;
+    _resumeRestoreTimeouts = [];
+    _postResumeGuardUntil = 0;
+    _settingBrightness = false;
 
     enable() {
-        // Remove any existing timeout before creating a new one
         if (this._timeoutId) {
             GLib.source_remove(this._timeoutId);
             this._timeoutId = null;
@@ -62,14 +54,60 @@ export default class VideoBrightnessExtension extends Extension {
             this._timeoutId = null;
         }
 
+        this._clearResumeRestoreTimeouts();
+
         this._stopMonitoring();
         this._disconnectBrightnessMonitor();
         this._disconnectSleepMonitor();
         this._restoreBrightness();
 
         this._brightnessProxy = null;
+        this._settings = null;
         this._isVideoActive = false;
         this._lastKnownBrightness = -1;
+        this._postResumeGuardUntil = 0;
+        this._settingBrightness = false;
+    }
+
+    _clearResumeRestoreTimeouts() {
+        for (const id of this._resumeRestoreTimeouts) {
+            GLib.source_remove(id);
+        }
+        this._resumeRestoreTimeouts = [];
+    }
+
+    _suppressUserBrightnessTracking() {
+        return shouldSuppressUserBrightnessTracking({
+            isVideoActive: this._isVideoActive,
+            settingBrightness: this._settingBrightness,
+            monotonicNow: GLib.get_monotonic_time(),
+            postResumeGuardUntil: this._postResumeGuardUntil,
+        });
+    }
+
+    _loadSettings() {
+        try {
+            const schemaDir = this.dir.get_child('schemas')?.get_path();
+            if (!schemaDir)
+                return null;
+
+            const source = Gio.SettingsSchemaSource.new_from_directory(
+                schemaDir,
+                Gio.SettingsSchemaSource.get_default(),
+                false
+            );
+            const schema = source.lookup(SETTINGS_SCHEMA_ID, false);
+            if (!schema)
+                return null;
+
+            return new Gio.Settings({
+                settings_schema: schema,
+                path: SETTINGS_SCHEMA_PATH,
+            });
+        } catch (err) {
+            console.error('[Fullscreen MaxBright] settings unavailable:', err);
+            return null;
+        }
     }
 
     _initialize() {
@@ -78,8 +116,20 @@ export default class VideoBrightnessExtension extends Extension {
             return;
         }
 
+        this._settings = this._loadSettings();
         this._brightnessProxy = brightnessManager.globalScale;
-        this._lastKnownBrightness = this._getBrightness();
+
+        const savedBrightness = this._settings?.get_double('saved-brightness') ?? -1;
+        if (savedBrightness >= 0) {
+            this._lastKnownBrightness = savedBrightness;
+            this._scheduleBrightnessRestore(savedBrightness);
+        } else {
+            const currentBrightness = this._getBrightness();
+            if (currentBrightness >= 0) {
+                this._lastKnownBrightness = currentBrightness;
+            }
+        }
+
         this._startMonitoring();
         this._checkFullscreenVideo();
         this._connectBrightnessMonitor();
@@ -112,29 +162,76 @@ export default class VideoBrightnessExtension extends Extension {
         }
     }
 
+    _resolveUserBrightness() {
+        return resolveUserBrightness({
+            lastKnownBrightness: this._lastKnownBrightness,
+            savedBrightness: this._settings?.get_double('saved-brightness') ?? -1,
+            currentBrightness: this._getBrightness(),
+        });
+    }
+
     _onPrepareForSleep() {
-        // Snapshot the user's brightness before the system can reset it on wake
-        this._brightnessBeforeSleep = this._isVideoActive
-            ? this._lastKnownBrightness
-            : this._getBrightness();
+        const snapshot = this._resolveUserBrightness();
+        this._brightnessBeforeSleep = snapshot;
+        if (snapshot >= 0) {
+            this._persistBrightness(snapshot);
+        }
     }
 
     _onResumeFromSleep() {
-        // Hardware and compositor need a moment to settle after resume
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, SETTLE_DELAY_MS, () => {
-            if (this._brightnessBeforeSleep >= 0) {
-                // Temporarily suppress _onBrightnessChanged so the hardware-reset
-                // value doesn't overwrite the snapshot we took before sleep.
-                const snapshot = this._brightnessBeforeSleep;
-                this._brightnessBeforeSleep = -1;
+        let snapshot = this._brightnessBeforeSleep;
+        this._brightnessBeforeSleep = -1;
+
+        if (snapshot < 0) {
+            snapshot = this._resolveUserBrightness();
+        }
+
+        if (snapshot < 0) {
+            return;
+        }
+
+        if (!this._isVideoActive) {
+            this._lastKnownBrightness = snapshot;
+            this._persistBrightness(snapshot);
+        }
+
+        this._scheduleBrightnessRestore(snapshot);
+    }
+
+    _scheduleBrightnessRestore(targetBrightness) {
+        this._clearResumeRestoreTimeouts();
+
+        if (targetBrightness < 0) {
+            return;
+        }
+
+        this._postResumeGuardUntil = GLib.get_monotonic_time()
+            + POST_RESUME_GUARD_MS * 1000;
+
+        for (const delayMs of RESUME_RESTORE_DELAYS_MS) {
+            const timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delayMs, () => {
+                const index = this._resumeRestoreTimeouts.indexOf(timeoutId);
+                if (index >= 0) {
+                    this._resumeRestoreTimeouts.splice(index, 1);
+                }
 
                 if (!this._isVideoActive) {
-                    this._lastKnownBrightness = snapshot;
-                    this._setBrightness(snapshot);
+                    this._lastKnownBrightness = targetBrightness;
+                    this._setBrightness(targetBrightness);
                 }
-            }
-            return GLib.SOURCE_REMOVE;
-        });
+
+                return GLib.SOURCE_REMOVE;
+            });
+            this._resumeRestoreTimeouts.push(timeoutId);
+        }
+    }
+
+    _persistBrightness(value) {
+        if (value < 0 || !this._settings) {
+            return;
+        }
+
+        this._settings.set_double('saved-brightness', value);
     }
 
     _connectBrightnessMonitor() {
@@ -151,11 +248,14 @@ export default class VideoBrightnessExtension extends Extension {
     }
 
     _onBrightnessChanged() {
-        if (!this._isVideoActive) {
-            const currentBrightness = this._getBrightness();
-            if (currentBrightness >= 0) {
-                this._lastKnownBrightness = currentBrightness;
-            }
+        if (this._suppressUserBrightnessTracking()) {
+            return;
+        }
+
+        const currentBrightness = this._getBrightness();
+        if (currentBrightness >= 0) {
+            this._lastKnownBrightness = currentBrightness;
+            this._persistBrightness(currentBrightness);
         }
     }
 
@@ -202,28 +302,26 @@ export default class VideoBrightnessExtension extends Extension {
             return;
         }
 
-        const isFullscreen = focusWindow.is_fullscreen();
-        const windowClass = focusWindow.get_wm_class()?.toLowerCase() ?? '';
-        const windowTitle = focusWindow.get_title()?.toLowerCase() ?? '';
+        const shouldActivate = shouldActivateVideoMode({
+            isFullscreen: focusWindow.is_fullscreen(),
+            windowClass: focusWindow.get_wm_class() ?? '',
+            windowTitle: focusWindow.get_title() ?? '',
+        });
 
-        const isVideoPlayer = MEDIA_WINDOW_CLASSES.some(cls => windowClass.includes(cls));
-        const isMediaTitle = VIDEO_TITLE_KEYWORDS.some(keyword => windowTitle.includes(keyword));
-        const isBrowserVideo = BROWSER_CLASSES.some(browser => windowClass.includes(browser))
-            && BROWSER_VIDEO_SERVICES.some(service => windowTitle.includes(service));
-
-        const shouldActivateVideo = isFullscreen && (isVideoPlayer || isMediaTitle || isBrowserVideo);
-
-        if (shouldActivateVideo && !this._isVideoActive) {
+        if (shouldActivate && !this._isVideoActive) {
             this._enterVideoMode();
-        } else if (!shouldActivateVideo && this._isVideoActive) {
+        } else if (!shouldActivate && this._isVideoActive) {
             this._exitVideoMode();
         }
     }
 
     _enterVideoMode() {
+        this._clearResumeRestoreTimeouts();
+
         const currentBrightness = this._getBrightness();
         if (currentBrightness >= 0) {
             this._lastKnownBrightness = currentBrightness;
+            this._persistBrightness(currentBrightness);
         }
         this._isVideoActive = true;
         this._setBrightness(VIDEO_BRIGHTNESS);
@@ -250,10 +348,15 @@ export default class VideoBrightnessExtension extends Extension {
         }
 
         const currentBrightness = this._getBrightness();
-        if (Math.abs(currentBrightness - targetFloat) < BRIGHTNESS_EPSILON) {
+        if (shouldSkipBrightnessSet(currentBrightness, targetFloat)) {
             return;
         }
 
+        this._settingBrightness = true;
         this._brightnessProxy.value = targetFloat;
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            this._settingBrightness = false;
+            return GLib.SOURCE_REMOVE;
+        });
     }
 }
