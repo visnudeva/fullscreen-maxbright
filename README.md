@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/0376a7f9-667f-4f39-bc93-850c1ff369c2
+
 # <img src="https://github.com/visnudeva/fullscreen-maxbright/blob/main/icon.png?raw=true" width="50"> Fullscreen MaxBright / Smart Brightness Control
 
 
