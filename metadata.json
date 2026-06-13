@@ -3,7 +3,7 @@
   "description": "Automatically sets brightness to maximum when watching fullscreen videos and restores the previous setting when exiting.",
   "uuid": "fullscreen-maxbright@visnudeva.github.io",
   "shell-version": ["48", "49", "50"],
-  "version": 3,
+  "version": 5,
   "donations": {
   	"kofi": "visnu_deva"
 	},
