@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.fullscreen-maxbright"
+          path="/org/gnome/shell/extensions/fullscreen-maxbright/">
+    <key name="saved-brightness" type="d">
+      <default>-1</default>
+      <summary>Saved user brightness</summary>
+      <description>Last manually set brightness level (0.0-1.0), restored across reboots and after video mode.</description>
+    </key>
+  </schema>
+</schemalist>
