@@ -19,6 +19,7 @@ const MONITOR_INTERVAL_SEC = 1;
 
 export default class VideoBrightnessExtension extends Extension {
     _brightnessProxy = null;
+    _settings = null;
     _isVideoActive = false;
     _lastKnownBrightness = -1;
     _timeoutId = null;
@@ -56,6 +57,7 @@ export default class VideoBrightnessExtension extends Extension {
         this._restoreBrightness();
 
         this._brightnessProxy = null;
+        this._settings = null;
         this._isVideoActive = false;
         this._lastKnownBrightness = -1;
         this._postResumeGuardUntil = 0;
@@ -88,9 +90,10 @@ export default class VideoBrightnessExtension extends Extension {
             return;
         }
 
+        this._settings = this.getSettings();
         this._brightnessProxy = brightnessManager.globalScale;
 
-        const savedBrightness = this.getSettings().get_double('saved-brightness');
+        const savedBrightness = this._settings.get_double('saved-brightness');
         if (savedBrightness >= 0) {
             this._lastKnownBrightness = savedBrightness;
             this._scheduleBrightnessRestore(savedBrightness);
@@ -136,7 +139,7 @@ export default class VideoBrightnessExtension extends Extension {
     _resolveUserBrightness() {
         return resolveUserBrightness({
             lastKnownBrightness: this._lastKnownBrightness,
-            savedBrightness: this.getSettings().get_double('saved-brightness'),
+            savedBrightness: this._settings?.get_double('saved-brightness') ?? -1,
             currentBrightness: this._getBrightness(),
         });
     }
@@ -198,11 +201,11 @@ export default class VideoBrightnessExtension extends Extension {
     }
 
     _persistBrightness(value) {
-        if (value < 0) {
+        if (value < 0 || !this._settings) {
             return;
         }
 
-        this.getSettings().set_double('saved-brightness', value);
+        this._settings.set_double('saved-brightness', value);
     }
 
     _connectBrightnessMonitor() {
