@@ -12,9 +12,6 @@ import {
 } from './lib/brightness.js';
 import {shouldActivateVideoMode} from './lib/video-detection.js';
 
-const SETTINGS_SCHEMA_ID = 'org.gnome.shell.extensions.fullscreen-maxbright';
-const SETTINGS_SCHEMA_PATH = '/org/gnome/shell/extensions/fullscreen-maxbright/';
-
 const SETTLE_DELAY_MS = 1000;
 const POST_RESUME_GUARD_MS = 5000;
 const RESUME_RESTORE_DELAYS_MS = [0, 1000, 2500, 4500];
@@ -22,19 +19,16 @@ const MONITOR_INTERVAL_SEC = 1;
 
 export default class VideoBrightnessExtension extends Extension {
     _brightnessProxy = null;
-    _settings = null;
     _isVideoActive = false;
     _lastKnownBrightness = -1;
     _timeoutId = null;
     _monitorTimeoutId = null;
-    _windowFocusId = null;
-    _workspaceId = null;
-    _brightnessChangedId = null;
     _sleepSignalId = null;
     _brightnessBeforeSleep = -1;
     _resumeRestoreTimeouts = [];
     _postResumeGuardUntil = 0;
     _settingBrightness = false;
+    _settingBrightnessIdleId = null;
 
     enable() {
         if (this._timeoutId) {
@@ -62,10 +56,13 @@ export default class VideoBrightnessExtension extends Extension {
         this._restoreBrightness();
 
         this._brightnessProxy = null;
-        this._settings = null;
         this._isVideoActive = false;
         this._lastKnownBrightness = -1;
         this._postResumeGuardUntil = 0;
+        if (this._settingBrightnessIdleId) {
+            GLib.source_remove(this._settingBrightnessIdleId);
+            this._settingBrightnessIdleId = null;
+        }
         this._settingBrightness = false;
     }
 
@@ -85,41 +82,15 @@ export default class VideoBrightnessExtension extends Extension {
         });
     }
 
-    _loadSettings() {
-        try {
-            const schemaDir = this.dir.get_child('schemas')?.get_path();
-            if (!schemaDir)
-                return null;
-
-            const source = Gio.SettingsSchemaSource.new_from_directory(
-                schemaDir,
-                Gio.SettingsSchemaSource.get_default(),
-                false
-            );
-            const schema = source.lookup(SETTINGS_SCHEMA_ID, false);
-            if (!schema)
-                return null;
-
-            return new Gio.Settings({
-                settings_schema: schema,
-                path: SETTINGS_SCHEMA_PATH,
-            });
-        } catch (err) {
-            console.error('[Fullscreen MaxBright] settings unavailable:', err);
-            return null;
-        }
-    }
-
     _initialize() {
         const brightnessManager = Main.brightnessManager;
         if (!brightnessManager?.globalScale) {
             return;
         }
 
-        this._settings = this._loadSettings();
         this._brightnessProxy = brightnessManager.globalScale;
 
-        const savedBrightness = this._settings?.get_double('saved-brightness') ?? -1;
+        const savedBrightness = this.getSettings().get_double('saved-brightness');
         if (savedBrightness >= 0) {
             this._lastKnownBrightness = savedBrightness;
             this._scheduleBrightnessRestore(savedBrightness);
@@ -165,7 +136,7 @@ export default class VideoBrightnessExtension extends Extension {
     _resolveUserBrightness() {
         return resolveUserBrightness({
             lastKnownBrightness: this._lastKnownBrightness,
-            savedBrightness: this._settings?.get_double('saved-brightness') ?? -1,
+            savedBrightness: this.getSettings().get_double('saved-brightness'),
             currentBrightness: this._getBrightness(),
         });
     }
@@ -227,24 +198,23 @@ export default class VideoBrightnessExtension extends Extension {
     }
 
     _persistBrightness(value) {
-        if (value < 0 || !this._settings) {
+        if (value < 0) {
             return;
         }
 
-        this._settings.set_double('saved-brightness', value);
+        this.getSettings().set_double('saved-brightness', value);
     }
 
     _connectBrightnessMonitor() {
-        this._brightnessChangedId = this._brightnessProxy.connect('notify::value', () => {
-            this._onBrightnessChanged();
-        });
+        this.connectObject(
+            this._brightnessProxy,
+            'notify::value',
+            () => this._onBrightnessChanged(),
+        );
     }
 
     _disconnectBrightnessMonitor() {
-        if (this._brightnessChangedId && this._brightnessProxy) {
-            this._brightnessProxy.disconnect(this._brightnessChangedId);
-            this._brightnessChangedId = null;
-        }
+        this.disconnectObject(this._brightnessProxy);
     }
 
     _onBrightnessChanged() {
@@ -260,13 +230,14 @@ export default class VideoBrightnessExtension extends Extension {
     }
 
     _startMonitoring() {
-        this._windowFocusId = global.display.connect('notify::focus-window', () => {
-            this._checkFullscreenVideo();
-        });
-
-        this._workspaceId = global.workspace_manager.connect('active-workspace-changed', () => {
-            this._checkFullscreenVideo();
-        });
+        this.connectObject(
+            global.display,
+            'notify::focus-window',
+            () => this._checkFullscreenVideo(),
+            global.workspace_manager,
+            'active-workspace-changed',
+            () => this._checkFullscreenVideo(),
+        );
 
         this._monitorTimeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, MONITOR_INTERVAL_SEC, () => {
             this._checkFullscreenVideo();
@@ -275,15 +246,8 @@ export default class VideoBrightnessExtension extends Extension {
     }
 
     _stopMonitoring() {
-        if (this._windowFocusId) {
-            global.display.disconnect(this._windowFocusId);
-            this._windowFocusId = null;
-        }
-
-        if (this._workspaceId) {
-            global.workspace_manager.disconnect(this._workspaceId);
-            this._workspaceId = null;
-        }
+        this.disconnectObject(global.display);
+        this.disconnectObject(global.workspace_manager);
 
         if (this._monitorTimeoutId) {
             GLib.source_remove(this._monitorTimeoutId);
@@ -354,8 +318,12 @@ export default class VideoBrightnessExtension extends Extension {
 
         this._settingBrightness = true;
         this._brightnessProxy.value = targetFloat;
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        if (this._settingBrightnessIdleId) {
+            GLib.source_remove(this._settingBrightnessIdleId);
+        }
+        this._settingBrightnessIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
             this._settingBrightness = false;
+            this._settingBrightnessIdleId = null;
             return GLib.SOURCE_REMOVE;
         });
     }
