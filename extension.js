@@ -209,15 +209,16 @@ export default class VideoBrightnessExtension extends Extension {
     }
 
     _connectBrightnessMonitor() {
-        this.connectObject(
-            this._brightnessProxy,
+        this._brightnessProxy.connectObject(
             'notify::value',
             () => this._onBrightnessChanged(),
+            this,
         );
     }
 
     _disconnectBrightnessMonitor() {
-        this.disconnectObject(this._brightnessProxy);
+        if (this._brightnessProxy)
+            this._brightnessProxy.disconnectObject(this);
     }
 
     _onBrightnessChanged() {
@@ -233,13 +234,15 @@ export default class VideoBrightnessExtension extends Extension {
     }
 
     _startMonitoring() {
-        this.connectObject(
-            global.display,
+        global.display.connectObject(
             'notify::focus-window',
             () => this._checkFullscreenVideo(),
-            global.workspace_manager,
+            this,
+        );
+        global.workspace_manager.connectObject(
             'active-workspace-changed',
             () => this._checkFullscreenVideo(),
+            this,
         );
 
         this._monitorTimeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, MONITOR_INTERVAL_SEC, () => {
@@ -249,8 +252,8 @@ export default class VideoBrightnessExtension extends Extension {
     }
 
     _stopMonitoring() {
-        this.disconnectObject(global.display);
-        this.disconnectObject(global.workspace_manager);
+        global.display.disconnectObject(this);
+        global.workspace_manager.disconnectObject(this);
 
         if (this._monitorTimeoutId) {
             GLib.source_remove(this._monitorTimeoutId);
